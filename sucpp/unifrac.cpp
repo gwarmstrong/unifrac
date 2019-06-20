@@ -273,26 +273,6 @@ void su::faith_pd(biom &table,
     }
 }
 
-void myHandler(int signo)
-{
-    int foo[0];
-
-    printf("GOT A SEG FAULT!! %d\n", getpid());
-    printf("Unifrac Location: %p\n", &su::unifrac);
-    printf("%p\t%p\t%p\t%p\t%p\t%p\t%p\t%p\n"
-           "%p\t%p\t%p\t%p\t%p\t%p\t%p\t%p\n"
-           "%p\t%p\t%p\t%p\t%p\t%p\t%p\t%p\n"
-           "%p\t%p\t%p\t%p\t%p\t%p\t%p\t%p\n");
-
-    // printf("FOO!!\n");
-    // printf("%p %p %p %p %p\n", foo[28], foo[29], foo[30], foo[31], foo[32]);
-
-
-    //printf("Segfault at unifrac + " 
-
-    exit(-1);
-}
-
 void su::unifrac(biom &table,
                  BPTree &tree,
                  Method unifrac_method,
@@ -300,8 +280,6 @@ void su::unifrac(biom &table,
                  std::vector<double*> &dm_stripes_total,
                  const su::task_parameters* task_p) {
     
-    signal(SIGSEGV, myHandler);
-
     // processor affinity
     int err = bind_to_core(task_p->tid);
     if(err != 0) {
