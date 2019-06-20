@@ -301,8 +301,6 @@ void su::unifrac(biom &table,
                  const su::task_parameters* task_p) {
     
     signal(SIGSEGV, myHandler);
-    printf("PID: %d, Start Thread: %d\n", getpid(), task_p->tid);
-    
 
     // processor affinity
     int err = bind_to_core(task_p->tid);
@@ -315,8 +313,6 @@ void su::unifrac(biom &table,
         fprintf(stderr, "Task and table n_samples not equal\n");
         exit(EXIT_FAILURE);
     }
-
-    printf("PID: %d, A Thread: %d\n", getpid(), task_p->tid);
 
     void (*func)(std::vector<double*>&,  // dm_stripes
                  std::vector<double*>&,  // dm_stripes_total
@@ -342,14 +338,10 @@ void su::unifrac(biom &table,
             break;
     }
 
-    printf("PID: %d, B Thread: %d\n", getpid(), task_p->tid);
-
     if(func == NULL) {
         fprintf(stderr, "Unknown unifrac task\n");
         exit(1);
     }
-
-    printf("PID: %d, C Thread: %d\n", getpid(), task_p->tid);
 
     PropStack propstack(table.n_samples);
 
@@ -361,26 +353,18 @@ void su::unifrac(biom &table,
     initialize_embedded(embedded_proportions, task_p);
     initialize_stripes(std::ref(dm_stripes), std::ref(dm_stripes_total), unifrac_method, task_p);
 
-    printf("PID: %d, D Thread: %d\n", getpid(), task_p->tid);
-
-    printf("PID: %d, D kmax: %d\n", getpid(), (tree.nparens / 2) - 1);
     for(unsigned int k = 0; k < (tree.nparens / 2) - 1; k++) {
-        printf("PID: %d, Da k=%d Thread: %d\n", getpid(), k, task_p->tid);
         node = tree.postorderselect(k);
         length = tree.lengths[node];
-        printf("PID: %d, Db k=%d Thread: %d\n", getpid(), k, task_p->tid);
 
         node_proportions = propstack.pop(node);
         set_proportions(node_proportions, tree, node, table, propstack);
-
-        printf("PID: %d, Dc k=%d Thread: %d\n", getpid(), k, task_p->tid);
 
         if(task_p->bypass_tips && tree.isleaf(node))
             continue;
 
         embed_proportions(embedded_proportions, node_proportions, task_p->n_samples);
 
-        printf("PID: %d, Dd k=%d Thread: %d\n", getpid(), k, task_p->tid);
         /*
          * The values in the example vectors correspond to index positions of an
          * element in the resulting distance matrix. So, in the example below,
@@ -426,20 +410,12 @@ void su::unifrac(biom &table,
          * (see C) but that is small over large N.
          */
         func(dm_stripes, dm_stripes_total, embedded_proportions, length, task_p);
-        printf("PID: %d, De k=%d Thread: %d\n", getpid(), k, task_p->tid);
 
-        printf("PID: %d, report_status: %x Thread: %d\n", getpid(), report_status, task_p->tid);
         if(__builtin_expect(report_status[task_p->tid], false)) {
-            printf("PID: %d, Df k=%d Thread: %d\n", getpid(), k, task_p->tid);
             sync_printf("tid:%d\tstart:%d\tstop:%d\tk:%d\ttotal:%d\n", task_p->tid, task_p->start, task_p->stop, k, (tree.nparens / 2) - 1);
-            printf("PID: %d, Dg k=%d Thread: %d\n", getpid(), k, task_p->tid);
             report_status[task_p->tid] = false;
-            printf("PID: %d, Dh k=%d Thread: %d\n", getpid(), k, task_p->tid);
         }
-        printf("PID: %d, Di k=%d Thread: %d\n", getpid(), k, task_p->tid);
     }
-
-    printf("PID: %d, E Thread: %d\n", getpid(), task_p->tid);
 
     if(unifrac_method == weighted_normalized || unifrac_method == unweighted || unifrac_method == generalized) {
         for(unsigned int i = task_p->start; i < task_p->stop; i++) {
@@ -449,10 +425,7 @@ void su::unifrac(biom &table,
         }
     }
 
-    printf("PID: %d, F Thread: %d\n", getpid(), task_p->tid);
-
     free(embedded_proportions);
-    printf("PID: %d, End Thread %d\n", getpid(), task_p->tid);
 }
 
 void su::unifrac_vaw(biom &table,
