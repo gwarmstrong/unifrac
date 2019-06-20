@@ -574,7 +574,6 @@ void su::process_stripes(biom &table,
 
     // register a signal handler so we can ask the master thread for its
     // progress
-    printf("Started process_strips...");
     if (signal(SIGUSR1, sig_handler) == SIG_ERR)
         fprintf(stderr, "Can't catch SIGUSR1\n");
 
