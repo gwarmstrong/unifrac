@@ -5,3 +5,5 @@
 #
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
+from .test_methods import *
+from .test_api import *
