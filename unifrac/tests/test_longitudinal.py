@@ -1,15 +1,156 @@
 import unittest
+from unittest import mock
 from io import StringIO
 from unittest import TestCase
+import pkg_resources
 
 import numpy as np
 from skbio import TreeNode
 from skbio.diversity import beta
+from biom import load_table
 
-from unifrac.longitudinal import _emd_unifrac_single_pair, _weight_adjuster
+from unifrac.longitudinal import (_emd_unifrac_single_pair,
+                                  _weight_adjuster,
+                                  hotspot,
+                                  hotspot_pairs)
 
 
-class EMDUnifracTests(unittest.TestCase):
+class TestHotspotPairs(unittest.TestCase):
+
+    package = 'unifrac.tests'
+
+    def setUp(self):
+        self.tree_path = self.get_data_path('t1.newick')
+        self.table_path = self.get_data_path('e1.biom')
+
+    def get_data_path(self, filename):
+        # adapted from qiime2.plugin.testing.TestPluginBase
+        return pkg_resources.resource_filename(self.package,
+                                               'data/%s' % filename)
+
+    def test_hotspot_pairs_paths(self):
+        pairs = [('A', 'B'), ('B', 'C')]
+        hotspot_dict = hotspot_pairs(self.table_path,
+                                     self.tree_path,
+                                     pairs,
+                                     metric='unweighted_unifrac')
+        a_b_node_id = 7
+        b_c_node_id = 4
+        self.assertEqual(a_b_node_id, hotspot_dict[('A', 'B')]['node_address'])
+        self.assertEqual(b_c_node_id, hotspot_dict[('B', 'C')]['node_address'])
+
+    def test_hotspot_pairs_objects(self):
+        pairs = [('A', 'B'), ('B', 'C')]
+        table = load_table(self.table_path)
+        tree = TreeNode.read(self.tree_path)
+        hotspot_dict = hotspot_pairs(table,
+                                     tree,
+                                     pairs,
+                                     metric='unweighted_unifrac')
+        a_b_node_id = 7
+        b_c_node_id = 4
+        self.assertEqual(a_b_node_id, hotspot_dict[('A', 'B')]['node_address'])
+        self.assertEqual(b_c_node_id, hotspot_dict[('B', 'C')]['node_address'])
+
+    def test_hotspot_pairs_unsupported_tree_type(self):
+        pairs = [('A', 'B'), ('B', 'C')]
+        with self.assertRaisesRegex(ValueError, r"Unsupported.*tree"):
+            hotspot_pairs(self.table_path,
+                          [],
+                          pairs,
+                          metric='unweighted_unifrac')
+
+    def test_hotspot_pairs_unsupported_table_type(self):
+        pairs = [('A', 'B'), ('B', 'C')]
+        with self.assertRaisesRegex(ValueError, r"Unsupported.*table"):
+            hotspot_pairs([],
+                          self.tree_path,
+                          pairs,
+                          metric='unweighted_unifrac')
+
+    def test_hotspot_pairs_unsupported_table_metric(self):
+        pairs = [('A', 'B'), ('B', 'C')]
+        with self.assertRaisesRegex(ValueError, r"Unsupported metric"):
+            hotspot_pairs(self.table_path,
+                          self.tree_path,
+                          pairs,
+                          metric='not-a-real-metric')
+
+
+class TestHotspot(unittest.TestCase):
+
+    package = 'unifrac.tests'
+
+    def setUp(self):
+        self.tree_str = '(((1:0.3, 2:0.3)6:0.5,(3:0.1,4:0.1)7:0.1)8:0.1,' \
+                    '5:0.1)root;'
+        tree = TreeNode.read(StringIO(self.tree_str))
+        tree.assign_ids()
+        self.tree = tree
+        self.otu_ids = ['1', '2', '3', '4', '5']
+        self.u_counts = [0, 0, 1, 1, 2]
+        self.v_counts = [1, 1, 1, 1, 0]
+
+    def get_data_path(self, filename):
+        # adapted from qiime2.plugin.testing.TestPluginBase
+        return pkg_resources.resource_filename(self.package,
+                                               'data/%s' % filename)
+
+    def test_hotspot_gets_profile(self):
+        with mock.patch('unifrac.longitudinal._calculate_hotspot') as \
+                mocked_hotspot:
+            mocked_return_node = self.tree
+            mocked_hotspot.return_value = mocked_return_node
+            hotspot_profile = hotspot(self.u_counts,
+                                      self.v_counts,
+                                      self.otu_ids,
+                                      self.tree,
+                                      metric='weighted_unifrac')
+
+        observed_node = self.tree.find_by_id(hotspot_profile['node_address'])
+        self.assertCountEqual(mocked_return_node, observed_node)
+
+    def test_hotspot_gets_profile_table_smaller_than_tree(self):
+        with mock.patch('unifrac.longitudinal._calculate_hotspot') as \
+                mocked_hotspot:
+            mocked_return_node = self.tree
+            mocked_hotspot.return_value = mocked_return_node
+            u_counts = self.u_counts.copy()
+            v_counts = self.v_counts.copy()
+            otu_ids = self.otu_ids.copy()
+            u_counts.pop(), v_counts.pop(), otu_ids.pop()
+            hotspot_profile = hotspot(self.u_counts,
+                                      self.v_counts,
+                                      self.otu_ids,
+                                      self.tree,
+                                      metric='weighted_unifrac')
+
+        observed_node = self.tree.find_by_id(hotspot_profile['node_address'])
+        self.assertCountEqual(mocked_return_node, observed_node)
+
+    def test_hotspot_gets_profile_works_on_path(self):
+        with mock.patch('unifrac.longitudinal._calculate_hotspot') as \
+                mocked_hotspot:
+            mocked_return_node = self.tree
+            t1 = self.get_data_path('t1.newick')
+            mocked_hotspot.return_value = mocked_return_node
+            hotspot_profile = hotspot(self.u_counts,
+                                      self.v_counts,
+                                      ['a', 'b', 'c', 'd', 'e'],
+                                      t1,
+                                      metric='weighted_unifrac')
+
+        observed_node = self.tree.find_by_id(hotspot_profile['node_address'])
+        self.assertCountEqual(mocked_return_node, observed_node)
+
+    def test_hotspot_unsupported_tree_type(self):
+        with self.assertRaisesRegex(ValueError, r'Unsupported type .* for '
+                                                r'tree'):
+            hotspot(self.u_counts, self.v_counts, self.otu_ids,
+                    ['list', 'of', 'things'])
+
+
+class TestEMDUnifrac(unittest.TestCase):
     package = 'unifrac.tests'
 
     # see tests in
@@ -156,7 +297,7 @@ class TestWeightAdjuster(TestCase):
         expected_2 = np.array([1/2, 1/2, 0, 0])
         adjusted_s1, adjusted_s2 = _weight_adjuster(self.sample_1,
                                                     self.sample_2,
-                                                    method='weighted')
+                                                    method='weighted_unifrac')
 
         self.assertTrue(np.allclose(expected_1, adjusted_s1))
         self.assertTrue(np.allclose(expected_2, adjusted_s2))
@@ -169,7 +310,7 @@ class TestWeightAdjuster(TestCase):
         adjusted_s1, adjusted_s2 = _weight_adjuster(self.sample_1,
                                                     self.sample_2,
                                                     tree=self.tree,
-                                                    method='unweighted')
+                                                    method='unweighted_unifrac')
 
         self.assertTrue(np.allclose(expected_1, adjusted_s1))
         self.assertTrue(np.allclose(expected_2, adjusted_s2))
