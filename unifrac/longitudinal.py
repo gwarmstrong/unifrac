@@ -30,7 +30,7 @@ def hotspot_pairs(table: Union[str, biom.Table],
     Returns
     -------
         Dictionary containing a dictionary of node statistics for the
-        `hotspot` of reach pair in `pairs`
+        `hotspot` of each pair in `pairs`
 
     Raises
     ------
