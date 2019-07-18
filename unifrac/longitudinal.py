@@ -44,6 +44,11 @@ def hotspot_pairs(table: Union[str, biom.Table],
     ----------
     # TODO
 
+    Examples
+    --------
+    >>> pairs = [('A', 'B'), ('B', 'C')]
+    >>> hotspot_pairs('e1.biom', 't1.newick', pairs, metric='weighted_unifrac')
+
     """
 
     if isinstance(tree, str):
@@ -80,8 +85,8 @@ def hotspot_pairs(table: Union[str, biom.Table],
     return all_results
 
 
-def hotspot(u_counts: np.array,
-            v_counts: np.array,
+def hotspot(u_counts: Union[np.array, np.array],
+            v_counts: Union[List, np.array],
             otu_ids: Union[List, np.array],
             tree: Union[str, skbio.TreeNode],
             metric='weighted_unifrac') -> Dict:
@@ -119,6 +124,14 @@ def hotspot(u_counts: np.array,
     ----------
     # TODO
 
+    Examples
+    --------
+    >>> u_counts = [0, 0, 1, 1, 2]
+    >>> v_counts = [1, 1, 1, 1, 0]
+    >>> otu_ids = ['a', 'b', 'c', 'd', 'e']
+    >>> tree = 't1.newick'
+    >>> hotspot(u_counts, v_counts, otu_ids, tree)
+
     """
     # basically just takes the max of diff_abund from
     # _emd_unifrac_single_pair and returns the profile for that hotspot
@@ -136,13 +149,15 @@ def hotspot(u_counts: np.array,
 
 # TODO with EMDUnifrac there may be some concern over uniqueness of
 #  hotspots, but I am not sure how this will play out on real data
-def _calculate_hotspot(u_counts: np.array,
-                       v_counts: np.array,
+def _calculate_hotspot(u_counts: Union[np.array, List],
+                       v_counts: Union[np.array, List],
                        otu_ids: Union[List, np.array],
                        tree: skbio.TreeNode,
                        metric='weighted_unifrac') -> skbio.TreeNode:
     # general idea with EMD unifrac: should be able to adjust weights for
     # different unifrac methods
+    u_counts = np.array(u_counts)
+    v_counts = np.array(v_counts)
     u_counts, v_counts = _weight_adjuster(u_counts,
                                           v_counts,
                                           tree,
