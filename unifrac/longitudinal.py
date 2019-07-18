@@ -122,25 +122,27 @@ def hotspot(u_counts: np.array,
     """
     # basically just takes the max of diff_abund from
     # _emd_unifrac_single_pair and returns the profile for that hotspot
+    # TODO allow stringIO or file object?
     if isinstance(tree, str):
         tree = skbio.TreeNode.read(tree)
     elif not isinstance(tree, skbio.TreeNode):
         raise ValueError("Unsupported type {} for tree.".format(type(tree)))
-    # TODO shear tree to otu_ids
     tree = tree.shear(otu_ids)
-    # general idea with EMD unifrac: should be able to adjust weights for
-    # different unifrac methods
-
-    max_change_node = _get_hotspot(u_counts, v_counts, otu_ids, tree, metric)
+    max_change_node = _calculate_hotspot(u_counts, v_counts, otu_ids, tree,
+                                         metric)
     profile = _profile_tree_node(max_change_node)
     return profile
 
 
-def _get_hotspot(u_counts: np.array,
-                 v_counts: np.array,
-                 otu_ids: Union[List, np.array],
-                 tree: skbio.TreeNode,
-                 metric='weighted_unifrac') -> skbio.TreeNode:
+# TODO with EMDUnifrac there may be some concern over uniqueness of
+#  hotspots, but I am not sure how this will play out on real data
+def _calculate_hotspot(u_counts: np.array,
+                       v_counts: np.array,
+                       otu_ids: Union[List, np.array],
+                       tree: skbio.TreeNode,
+                       metric='weighted_unifrac') -> skbio.TreeNode:
+    # general idea with EMD unifrac: should be able to adjust weights for
+    # different unifrac methods
     u_counts, v_counts = _weight_adjuster(u_counts,
                                           v_counts,
                                           tree,
@@ -158,13 +160,12 @@ def _get_hotspot(u_counts: np.array,
                                                           v_counts)
     # find most extreme differential abundance
     max_abs_diff_abund = -1
-    signed_max_abs_diff_abund = -1
+    # max_change_node_id = tree.find('root')
     # TODO edge case where samples are exactly same
-    for id_, diff_abund in differential_abundances:
+    for id_, diff_abund in differential_abundances.items():
         abs_diff_abund = abs(diff_abund)
         if abs_diff_abund > max_abs_diff_abund:
             max_abs_diff_abund = abs_diff_abund
-            signed_max_abs_diff_abund = diff_abund
             max_change_node_id = id_
 
     max_change_node = tree.find_by_id(max_change_node_id)
