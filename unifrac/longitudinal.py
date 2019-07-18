@@ -130,6 +130,17 @@ def hotspot(u_counts: np.array,
     tree = tree.shear(otu_ids)
     # general idea with EMD unifrac: should be able to adjust weights for
     # different unifrac methods
+
+    max_change_node = _get_hotspot(u_counts, v_counts, otu_ids, tree, metric)
+    profile = _profile_tree_node(max_change_node)
+    return profile
+
+
+def _get_hotspot(u_counts: np.array,
+                 v_counts: np.array,
+                 otu_ids: Union[List, np.array],
+                 tree: skbio.TreeNode,
+                 metric='weighted_unifrac') -> skbio.TreeNode:
     u_counts, v_counts = _weight_adjuster(u_counts,
                                           v_counts,
                                           tree,
@@ -158,9 +169,7 @@ def hotspot(u_counts: np.array,
 
     max_change_node = tree.find_by_id(max_change_node_id)
 
-    profile = _profile_tree_node(max_change_node)
-    profile.update({'differential_abundance': signed_max_abs_diff_abund})
-    return profile
+    return max_change_node
 
 
 def _weight_adjuster(sample_1: np.array,
