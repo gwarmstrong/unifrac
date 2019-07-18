@@ -46,6 +46,7 @@ def hotspot_pairs(table: Union[str, biom.Table],
 
     Examples
     --------
+    >>> from unifrac.longitudinal import hotspot_pairs
     >>> pairs = [('A', 'B'), ('B', 'C')]
     >>> hotspot_pairs('e1.biom', 't1.newick', pairs, metric='weighted_unifrac')
 
@@ -126,11 +127,12 @@ def hotspot(u_counts: Union[np.array, np.array],
 
     Examples
     --------
+    >>> from unifrac.longitudinal import hotspot
     >>> u_counts = [0, 0, 1, 1, 2]
     >>> v_counts = [1, 1, 1, 1, 0]
     >>> otu_ids = ['a', 'b', 'c', 'd', 'e']
     >>> tree = 't1.newick'
-    >>> hotspot(u_counts, v_counts, otu_ids, tree)
+    >>> hotspot(u_counts, v_counts, otu_ids, tree, metric='weighted_unifrac')
 
     """
     # basically just takes the max of diff_abund from
