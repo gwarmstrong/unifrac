@@ -108,7 +108,19 @@ class TestHotspot(unittest.TestCase):
                                       metric='weighted_unifrac')
 
         observed_node = self.tree.find_by_id(hotspot_profile['node_address'])
-        self.assertCountEqual(mocked_return_node, observed_node)
+        self.assertEqual(mocked_return_node, observed_node)
+
+    def test_hotspot_executes_calculate_hotspots(self):
+        mocked_return_node = self.tree
+        with mock.patch('skbio.TreeNode.find_by_id') as mocked_find:
+            mocked_find.return_value = mocked_return_node
+            hotspot_profile = hotspot(self.u_counts,
+                                      self.v_counts,
+                                      self.otu_ids,
+                                      self.tree,
+                                      metric='weighted_unifrac')
+        observed_node = self.tree.find_by_id(hotspot_profile['node_address'])
+        self.assertEqual(mocked_return_node, observed_node)
 
     def test_hotspot_gets_profile_table_smaller_than_tree(self):
         with mock.patch('unifrac.longitudinal._calculate_hotspot') as \
@@ -126,7 +138,7 @@ class TestHotspot(unittest.TestCase):
                                       metric='weighted_unifrac')
 
         observed_node = self.tree.find_by_id(hotspot_profile['node_address'])
-        self.assertCountEqual(mocked_return_node, observed_node)
+        self.assertEqual(mocked_return_node, observed_node)
 
     def test_hotspot_gets_profile_works_on_path(self):
         with mock.patch('unifrac.longitudinal._calculate_hotspot') as \
@@ -141,7 +153,7 @@ class TestHotspot(unittest.TestCase):
                                       metric='weighted_unifrac')
 
         observed_node = self.tree.find_by_id(hotspot_profile['node_address'])
-        self.assertCountEqual(mocked_return_node, observed_node)
+        self.assertEqual(mocked_return_node, observed_node)
 
     def test_hotspot_unsupported_tree_type(self):
         with self.assertRaisesRegex(ValueError, r'Unsupported type .* for '
