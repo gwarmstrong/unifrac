@@ -1,30 +1,68 @@
-from typing import Union, List, Tuple
-
+from typing import Union, List, Tuple, Dict
 import biom
 import numpy as np
 import skbio
 from biom import load_table
 
+available_metrics = {'weighted_unifrac', 'unweighted_unifrac'}
 
-# TODO change signature to be similar to
-#  `skbio.diversity.beta.unweighted_unifrac`
+
 def hotspot_pairs(table: Union[str, biom.Table],
                   tree: Union[str, skbio.TreeNode],
                   pairs: List[Tuple[str, str]],
-                  method: str = 'weighted'):
+                  metric: str = 'weighted_unifrac'):
+    """
+
+    Parameters
+    ----------
+    table
+        An instance or filepath to a BIOM 2.1 formatted table (HDF5)
+    tree
+        A skbio.TreeNode or filepath to a Newick formatted tree
+    pairs
+        A list of pairs of Sample ID's in the given `table`
+        corresponding to pairs that should be compared to generate
+        hotspots
+    metric
+        The pairwise distance function to apply.
+        Options: `weighted_unifrac` and `unweighted_unifrac`
+
+    Returns
+    -------
+        Dictionary containing a dictionary of node statistics for the
+        `hotspot` of reach pair in `pairs`
+
+    Raises
+    ------
+    # TODO
+
+    Notes
+    -----
+    # TODO
+
+    References
+    ----------
+    # TODO
+
+    """
 
     if isinstance(tree, str):
         tree = skbio.TreeNode.read(tree)
     elif not isinstance(tree, skbio.TreeNode):
         raise ValueError("Unsupported type {} for tree.".format(
-            type(table)))
+            type(tree)))
 
     if isinstance(table, str):
         table = load_table(table)
     elif not isinstance(table, biom.Table):
-        raise ValueError("Unsupported")
+        raise ValueError("Unsupported type {} for table.".format(
+            type(table)))
 
-    # TODO assert all ids in table are in tree
+    if metric not in available_metrics:
+        raise ValueError("Unsupported metric '{}'".format(metric))
+
+    # TODO assert all ids in table are in tree, might be able to reuse
+    #  validation functions from skbio
 
     tree.assign_ids()
 
@@ -34,45 +72,82 @@ def hotspot_pairs(table: Union[str, biom.Table],
     for sample_1, sample_2 in pairs:
         sample_1_data = table.data(sample_1)
         sample_2_data = table.data(sample_2)
-        all_results[(sample_1, sample_2)] = hotspot(tree,
-                                                    observation_names,
-                                                    sample_1_data,
+        all_results[(sample_1, sample_2)] = hotspot(sample_1_data,
                                                     sample_2_data,
-                                                    method=method)
+                                                    observation_names,
+                                                    tree,
+                                                    metric=metric)
     return all_results
 
 
-# TODO change signature to be similar to
-#  `skbio.diversity.beta.unweighted_unifrac`
-def hotspot(tree: Union[str, skbio.TreeNode],
-            names: np.ndarray,
-            sample_1: np.ndarray,
-            sample_2: np.ndarray,
-            method='weighted') -> dict():
+def hotspot(u_counts: np.array,
+            v_counts: np.array,
+            otu_ids: Union[List, np.array],
+            tree: Union[str, skbio.TreeNode],
+            metric='weighted_unifrac') -> Dict:
+    """
+
+    Parameters
+    ----------
+    u_counts, v_counts
+        Vectors of counts/relative abundances of OTUs for two samples. Must be
+        equal length.
+    otu_ids
+        Vector of OTU ids corresponding to tip names in tree. Must be the
+        same length as u_counts and v_counts.
+    tree
+        Tree relating the OTUs in otu_ids. The set of tip names in the
+        tree can be a superset of otu_ids, but not a subset.
+    metric
+        The pairwise distance function to apply. Options: `weighted_unifrac`
+        and `unweighted_unifrac`
+
+    Returns
+    -------
+        Dictionary of statistics on the node identified as contributing the
+        most to the distance specified by `metric`
+
+    Raises
+    ------
+    # TODO
+
+    Notes
+    -----
+    # TODO
+
+    References
+    ----------
+    # TODO
+
+    """
     # basically just takes the max of diff_abund from
     # _emd_unifrac_single_pair and returns the profile for that hotspot
     if isinstance(tree, str):
         tree = skbio.TreeNode.read(tree)
     elif not isinstance(tree, skbio.TreeNode):
-        raise ValueError("Unsupported type for tree.")
-
-    # TODO have `method` option adjust weights (could put up the stack to
-    #  avoid repeating adjustment for samples)
-    sample_1, sample_2 = _weight_adjuster(sample_1, sample_2, method=method)
+        raise ValueError("Unsupported type {} for tree.".format(type(tree)))
+    # TODO shear tree to otu_ids
+    tree = tree.shear(otu_ids)
+    # general idea with EMD unifrac: should be able to adjust weights for
+    # different unifrac methods
+    u_counts, v_counts = _weight_adjuster(u_counts,
+                                          v_counts,
+                                          tree,
+                                          method=metric)
 
     # makes sure each node has an id so we can refer to it later
     # ids are assigned by postorder traversal
     tree.assign_ids()
 
-    ids = [tree.find(name).id for name in names]
+    ids = [tree.find(name).id for name in otu_ids]
 
     _, differential_abundances = _emd_unifrac_single_pair(tree,
                                                           ids,
-                                                          sample_1,
-                                                          sample_2)
+                                                          u_counts,
+                                                          v_counts)
     # find most extreme differential abundance
-    max_abs_diff_abund = 0
-    signed_max_abs_diff_abund = 0
+    max_abs_diff_abund = -1
+    signed_max_abs_diff_abund = -1
     # TODO edge case where samples are exactly same
     for id_, diff_abund in differential_abundances:
         abs_diff_abund = abs(diff_abund)
@@ -83,19 +158,23 @@ def hotspot(tree: Union[str, skbio.TreeNode],
 
     max_change_node = tree.find_by_id(max_change_node_id)
 
-    profile = _profile_hotspot(max_change_node)
+    profile = _profile_tree_node(max_change_node)
     profile.update({'differential_abundance': signed_max_abs_diff_abund})
     return profile
 
 
-def _weight_adjuster(sample_1: np.ndarray,
-                     sample_2: np.ndarray,
-                     method: str = 'weighted'):
+def _weight_adjuster(sample_1: np.array,
+                     sample_2: np.array,
+                     tree: skbio.TreeNode = None,
+                     method: str = 'weighted_unifrac'):
     # TODO assumes non-negative data
-    if method == 'unweighted':
-        sample_1 = (sample_1 > 0).astype(float)
-        sample_2 = (sample_2 > 0).astype(float)
-    elif method == 'weighted':
+    if method == 'unweighted_unifrac':
+        if tree is None:
+            raise ValueError('Unweighted weight adjustment requires a tree.')
+        total_branch_length = tree.descending_branch_length()
+        sample_1 = (sample_1 > 0).astype(float) / total_branch_length
+        sample_2 = (sample_2 > 0).astype(float) / total_branch_length
+    elif method == 'weighted_unifrac':
         sample_1 = sample_1 / sample_1.sum()
         sample_2 = sample_2 / sample_2.sum()
     else:
@@ -104,23 +183,22 @@ def _weight_adjuster(sample_1: np.ndarray,
     return sample_1, sample_2
 
 
-def _profile_hotspot(hotspot_node: skbio.TreeNode) -> dict:
+def _profile_tree_node(node: skbio.TreeNode) -> dict:
     # returns dict with {'distance_to_root', 'clade_width',
     # 'maximally_divergent_tips', 'node_address'}
-    clade_width, maximally_divergent_tips = hotspot_node.get_max_distance()
-    output = {'distance_to_root': hotspot_node.distance(hotspot_node.root()),
+    clade_width, maximally_divergent_tips = node.get_max_distance()
+    output = {'distance_to_root': node.distance(node.root()),
               'clade_width': clade_width,
               'maximally_divergent_tips': maximally_divergent_tips,
-              'node_address': hotspot_node.id}
+              'node_address': node.id}
     return output
 
 
-# TODO change signature to be similar to
-#  `skbio.diversity.beta.unweighted_unifrac`
+# TODO potentially revist signature
 def _emd_unifrac_single_pair(tree: skbio.TreeNode,
                              ids: list,  # really could be any enumerated type
-                             sample_1_weights: np.ndarray,
-                             sample_2_weights: np.ndarray) -> \
+                             sample_1_weights: np.array,
+                             sample_2_weights: np.array) -> \
                              Tuple[float, dict]:
     # unweighted is present in the source
     # https://github.com/dkoslicki/EMDUnifrac/blob/master/src/EMDUnifrac.py
