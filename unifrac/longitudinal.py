@@ -145,7 +145,6 @@ def _emd_unifrac_single_pair(tree: skbio.TreeNode,
         parent_val += val
         partial_sums[parent_id] = parent_val
         if val != 0:
-            print('foo')
             # TODO edge case of identical samples?
             differential_abundance[node_id] = node.length * val
         distance += node.length * abs(val)
